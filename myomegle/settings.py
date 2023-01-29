@@ -29,9 +29,9 @@ SECRET_KEY = 'django-insecure-!vc*1_s66$+y7s(&8$!ow4sv#s)t)2zygbxaub!-g9to2ohw@0
 DEBUG = True
 
 if IS_HEROKU:
-    ALLOWED_HOSTS = ["*"]
+    ALLOWED_HOSTS = ["*", "https://myomegle.herokuapp.com/",]
 else:
-    ALLOWED_HOSTS = []
+    ALLOWED_HOSTS = ["https://myomegle.herokuapp.com/",]
 
 
 # Application definition
