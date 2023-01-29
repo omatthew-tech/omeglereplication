@@ -1,0 +1,57 @@
+<!-- chat/templates/chat/room.html -->
+<h1>{{ chat_room.room_name }}</h1>
+
+
+<ul id="video-list">
+
+</ul>
+
+<script>
+  // Create a media stream
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(function(stream) {
+      // Create a video element for the local video stream
+      var localVideo = document.createElement('video');
+      localVideo.id = 'local-video';
+      localVideo.srcObject = stream;
+      localVideo.autoplay = true;
+      localVideo.muted = true;
+
+      // Add the local video element to the page
+      document.querySelector('#video-list').appendChild(localVideo);
+
+      // Create a RTCPeerConnection
+      var pc = new RTCPeerConnection();
+
+      // Share the media stream
+      pc.addStream(stream);
+      pc.createOffer().then(function(offer) {
+        pc.setLocalDescription(offer);
+        sendMessage('offer', offer);
+      });
+
+      // Receive an offer
+      receiveOffer(function(offer) {
+        pc.setRemoteDescription(offer);
+        pc.createAnswer().then(function(answer) {
+          pc.setLocalDescription(answer);
+          sendMessage('answer', answer);
+        });
+      });
+
+      // Receive a track event
+      pc.ontrack = function(event) {
+        // Create a video element for the remote video stream
+        var remoteVideo = document.createElement('video');
+        remoteVideo.srcObject = event.streams[0];
+        remoteVideo.autoplay = true;
+
+        // Add the remote video element to the page
+        document.querySelector('#video-list').appendChild(remoteVideo);
+      };
+    });
+</script>
+
+
+
+

@@ -1,0 +1,33 @@
+<video id="local-video"></video>
+<video id="remote-video"></video>
+
+<script>
+  // Create a media stream
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(function(stream) {
+      // Display the local video stream
+      document.querySelector('#local-video').srcObject = stream;
+
+      // Create a RTCPeerConnection
+      var pc = new RTCPeerConnection();
+
+      // Share the media stream
+      pc.addStream(stream);
+      pc.createOffer().then(function(offer) {
+        pc.setLocalDescription(offer);
+        sendOffer(offer);
+      });
+
+      // Receive the offer
+      pc.ontrack = function(event) {
+        document.querySelector('#remote-video').srcObject = event.streams[0];
+      };
+      receiveOffer(function(offer) {
+        pc.setRemoteDescription(offer);
+        pc.createAnswer().then(function(answer) {
+          pc.setLocalDescription(answer);
+          sendAnswer(answer);
+        });
+      });
+    });
+</script>

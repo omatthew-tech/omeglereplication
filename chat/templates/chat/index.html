@@ -1,0 +1,17 @@
+<!-- chat/templates/chat/index.html -->
+
+<h1>Chat Rooms</h1>
+<ul>
+{% for chat_room in chat_rooms %}
+  <li><a href="{% url 'room' chat_room.room_name %}">{{ chat_room.room_name }}</a></li>
+{% endfor %}
+</ul>
+
+<!-- chat/templates/chat/room.html -->
+
+<h1>{{ chat_room.room_name }}</h1>
+<ul>
+{% for message in messages %}
+  <li>{{ message.sender }}: {{ message.message }}</li>
+{% endfor %}
+</ul>
