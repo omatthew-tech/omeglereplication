@@ -12,6 +12,8 @@ def room(request, room_name):
     context = {'chat_room': chat_room, 'messages': messages}
     return render(request, 'chat/room.html', context)
 
+
+
 def live_stream(request):
     return render(request, 'chat/live_stream.html')
 
