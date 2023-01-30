@@ -26,3 +26,4 @@ function sendMessage(type, message) {
     });
   }
   
+  var room_name = window.location.pathname.split('/').pop();
