@@ -1,16 +1,44 @@
 {% load static %}
 
 <!-- chat/templates/chat/room.html -->
-<script src="{% static 'chat/js/websockets.js' %}"></script>
-<!-- chat/templates/chat/room.html -->
 <h1>{{ chat_room.room_name }}</h1>
-
-<ul id="video-list">
-
-</ul>
-
+<h1>{{ chat_room.id }}</h1>
+<ul id="video-list"></ul>
 <script>
-  // Create a list to store RTCPeerConnections
+    function sendMessage(type, message) {
+    // Open a WebSocket connection to the server
+    var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
+  
+    // Send the message when the WebSocket connection is open
+    socket.addEventListener('open', function(event) {
+      socket.send(JSON.stringify({
+        type: type,
+        message: message.toString()
+      }));
+    });
+  }
+  
+  // Receive an offer from the other client
+  function receiveOffer(callback) {
+    // Open a WebSocket connection to the server
+    var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
+  
+    // Call the callback with the offer when a message is received
+    socket.addEventListener('message', function(event) {
+      var data = JSON.parse(event.data);
+      if (data.type === 'offer') {
+        callback(data.message);
+      }
+    });
+  }
+  
+  var room_name = window.location.pathname.split('/').pop();
+
+
+
+
+  // Keep track of the chat room id
+  var chatRoomId = "{{ chat_room.id }}";
   var connections = [];
 
   // Create a media stream
@@ -26,45 +54,51 @@
       // Add the local video element to the page
       document.querySelector('#video-list').appendChild(localVideo);
 
-      // Create a RTCPeerConnection
-      var pc = new RTCPeerConnection();
+      // Function to create a new RTCPeerConnection for each new user
+      function createPeerConnection(remoteUserId) {
+        var pc = new RTCPeerConnection();
+        connections[remoteUserId] = pc;
+        pc.addStream(stream);
 
-      // Add the RTCPeerConnection to the list
-      connections.push(pc);
+        // Receive an offer
+        receiveOffer(remoteUserId, function(offer) {
+          pc.setRemoteDescription(offer);
+          pc.createAnswer().then(function(answer) {
+            pc.setLocalDescription(answer);
+            sendMessage('answer', answer, chatRoomId, remoteUserId);
+          });
 
-      // Share the media stream
-      pc.addStream(stream);
-      pc.createOffer().then(function(offer) {
-        pc.setLocalDescription(offer);
-        sendMessage('offer', offer);
-      });
+          // Receive a track event
+          pc.ontrack = function(event) {
+            // Create a video element for the remote video stream
+            var remoteVideo = document.createElement('video');
+            remoteVideo.srcObject = event.streams[0];
+            remoteVideo.autoplay = true;
+
+            // Add the remote video element to the page
+            document.querySelector('#video-list').appendChild(remoteVideo);
+          };
+        });
+
+        pc.createOffer().then(function(offer) {
+          pc.setLocalDescription(offer);
+          sendMessage('offer', offer, chatRoomId, remoteUserId);
+        });
+      }
+
+      // Function to be called when a new user joins the room
+      function onNewUser(remoteUserId) {
+        createPeerConnection(remoteUserId);
+      }
+
+      // Function to be called when a user leaves the room
+      function onUserLeft(remoteUserId) {
+        connections[remoteUserId].close();
+        delete connections[remoteUserId];
+      }
     });
-
-  // Receive an offer
-  receiveOffer(function(offer) {
-    var pc = new RTCPeerConnection();
-
-    // Add the RTCPeerConnection to the list
-    connections.push(pc);
-
-    pc.setRemoteDescription(offer);
-    pc.createAnswer().then(function(answer) {
-      pc.setLocalDescription(answer);
-      sendMessage('answer', answer);
-    });
-
-    // Receive a track event
-    pc.ontrack = function(event) {
-      // Create a video element for the remote video stream
-      var remoteVideo = document.createElement('video');
-      remoteVideo.srcObject = event.streams[0];
-      remoteVideo.autoplay = true;
-
-      // Add the remote video element to the page
-      document.querySelector('#video-list').appendChild(remoteVideo);
-    };
-  });
 </script>
+
 
 
 
