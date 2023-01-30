@@ -7,5 +7,6 @@ class ChatRoom(models.Model):
 class Message(models.Model):
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE)
     sender = models.CharField(max_length=100)
+    receiver = models.CharField(max_length=100)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)

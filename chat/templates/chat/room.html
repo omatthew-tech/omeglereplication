@@ -1,4 +1,35 @@
 <h1>{{ chat_room.room_name }} Room</h1>
+
+<script>
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then((stream) => {
+        // Get the local video element and set its source to the local stream
+        const localVideo = document.getElementById("local-stream");
+        localVideo.srcObject = stream;
+  
+        // Create an RTCPeerConnection object
+        const peerConnection = new RTCPeerConnection();
+  
+        // Add the local stream to the peer connection
+        stream.getTracks().forEach((track) => {
+          peerConnection.addTrack(track, stream);
+        });
+  
+        // Send an offer to the other peer
+        peerConnection.createOffer().then((offer) => {
+          peerConnection.setLocalDescription(offer);
+  
+          socket.send(JSON.stringify({
+            type: 'offer',
+            offer: {
+              senderId: '{{ sender_id }}',
+              receiverId: '{{ receiver_id }}',
+              sdp: offer
+            }
+          }));
+        });
+      });
+  </script>
 <div id="streams-container">
 {% for message in messages %}
   <div class="stream">
@@ -9,34 +40,53 @@
 </div>
 <script>
   const streamsContainer = document.getElementById("streams-container");
-  const socket = new WebSocket("ws://" + window.location.host + "/live_stream/");
+  const socket = new WebSocket("ws://" + window.location.host + "{{chat_room.room_name}}");
   
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
     const type = data.type;
     const payload = data.payload;
-    
-    if (type === "offer") {
-      const senderStream = document.getElementById(`${payload.sender}-stream`);
-      const stream = new MediaStream();
-      senderStream.srcObject = stream;
+
+    if (type === 'offer') {
+      const offer = payload;
+      const senderId = offer.senderId;
+      const receiverId = offer.receiverId;
+
+      // Create an RTCPeerConnection object
       const peerConnection = new RTCPeerConnection();
-      peerConnection.addStream(stream);
-      peerConnection.setRemoteDescription(new RTCSessionDescription(payload.offer));
+
+      // Add the remote description to the peer connection
+      peerConnection.setRemoteDescription(offer.sdp);
+
+      // Create an answer
       peerConnection.createAnswer().then((answer) => {
+        // Set the local description
         peerConnection.setLocalDescription(answer);
+
+        // Send the answer back to the sender
         socket.send(JSON.stringify({
-          type: "answer",
-          answer: answer
+          type: 'answer',
+          answer: {
+            senderId: receiverId,
+            receiverId: senderId,
+            sdp: answer
+          }
         }));
       });
-    } else if (type === "answer") {
-      const senderStream = document.getElementById(`${payload.sender}-stream`);
-      const stream = new MediaStream();
-      senderStream.srcObject = stream;
-      const peerConnection = new RTCPeerConnection();
-      peerConnection.addStream(stream);
-      peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
+
+      // Add the stream to the video element
+      peerConnection.addEventListener('track', (event) => {
+        const videoElement = document.getElementById(senderId + "-stream");
+        videoElement.srcObject = event.streams[0];
+      });
+
+    } else if (type === 'answer') {
+      const answer = payload;
+      const senderId = answer.senderId;
+      const receiverId = answer.receiverId;
+
+      // Add the remote description to the peer connection
+      peerConnection.setRemoteDescription(answer.sdp);
     }
   };
 </script>
