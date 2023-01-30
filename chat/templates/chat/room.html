@@ -1,12 +1,14 @@
 <!-- chat/templates/chat/room.html -->
 <h1>{{ chat_room.room_name }}</h1>
 
-
 <ul id="video-list">
 
 </ul>
 
 <script>
+  // Create a list to store RTCPeerConnections
+  var connections = [];
+
   // Create a media stream
   navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     .then(function(stream) {
@@ -23,6 +25,9 @@
       // Create a RTCPeerConnection
       var pc = new RTCPeerConnection();
 
+      // Add the RTCPeerConnection to the list
+      connections.push(pc);
+
       // Share the media stream
       pc.addStream(stream);
       pc.createOffer().then(function(offer) {
@@ -32,25 +37,31 @@
 
       // Receive an offer
       receiveOffer(function(offer) {
+        var pc = new RTCPeerConnection();
+
+        // Add the RTCPeerConnection to the list
+        connections.push(pc);
+
         pc.setRemoteDescription(offer);
         pc.createAnswer().then(function(answer) {
           pc.setLocalDescription(answer);
           sendMessage('answer', answer);
         });
+
+        // Receive a track event
+        pc.ontrack = function(event) {
+          // Create a video element for the remote video stream
+          var remoteVideo = document.createElement('video');
+          remoteVideo.srcObject = event.streams[0];
+          remoteVideo.autoplay = true;
+
+          // Add the remote video element to the page
+          document.querySelector('#video-list').appendChild(remoteVideo);
+        };
       });
-
-      // Receive a track event
-      pc.ontrack = function(event) {
-        // Create a video element for the remote video stream
-        var remoteVideo = document.createElement('video');
-        remoteVideo.srcObject = event.streams[0];
-        remoteVideo.autoplay = true;
-
-        // Add the remote video element to the page
-        document.querySelector('#video-list').appendChild(remoteVideo);
-      };
     });
 </script>
+
 
 
 
