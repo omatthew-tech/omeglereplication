@@ -1,4 +1,7 @@
 {% load static %}
+<!DOCTYPE html>
+
+
 
 <!-- chat/templates/chat/room.html -->
 <h1>{{ chat_room.room_name }}</h1>
@@ -8,102 +11,119 @@
     function sendMessage(type, message) {
     // Open a WebSocket connection to the server
     var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
-  
-    // Send the message when the WebSocket connection is open
-    socket.addEventListener('open', function(event) {
-      socket.send(JSON.stringify({
-        type: type,
-        message: message.toString()
-      }));
-    });
+// Send the message when the WebSocket connection is open
+socket.addEventListener('open', function(event) {
+  socket.send(JSON.stringify({
+    type: type,
+    message: message.toString()
+  }));
+});
+}
+
+// Receive an offer from the other client
+function receiveOffer(callback) {
+// Open a WebSocket connection to the server
+var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
+// Call the callback with the offer when a message is received
+socket.addEventListener('message', function(event) {
+  var data = JSON.parse(event.data);
+  if (data.type === 'offer') {
+    callback(data.message);
   }
-  
-  // Receive an offer from the other client
-  function receiveOffer(callback) {
-    // Open a WebSocket connection to the server
-    var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
-  
-    // Call the callback with the offer when a message is received
-    socket.addEventListener('message', function(event) {
-      var data = JSON.parse(event.data);
-      if (data.type === 'offer') {
-        callback(data.message);
-      }
-    });
-  }
-  
-  var room_name = window.location.pathname.split('/').pop();
+});
+}
 
+var room_name = window.location.pathname.split('/').pop();
 
+// Keep track of the chat room id
+var chatRoomId = "{{ chat_room.id }}";
+var connections = {};
 
+// Create a media stream
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+.then(function(stream) {
+// Create a video element for the local video stream
+var localVideo = document.createElement('video');
+localVideo.id = 'local-video';
+localVideo.srcObject = stream;
+localVideo.autoplay = true;
+localVideo.muted = true;
 
-  // Keep track of the chat room id
-  var chatRoomId = "{{ chat_room.id }}";
-  var connections = [];
+  // Add the local video element to the page
+  document.querySelector('#video-list').appendChild(localVideo);
 
-  // Create a media stream
-  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(function(stream) {
-      // Create a video element for the local video stream
-      var localVideo = document.createElement('video');
-      localVideo.id = 'local-video';
-      localVideo.srcObject = stream;
-      localVideo.autoplay = true;
-      localVideo.muted = true;
+  // Function to create a new RTCPeerConnection for each new user
+  function createPeerConnection(remoteUserId) {
+    var pc = new RTCPeerConnection();
+    connections[remoteUserId] = pc;
+    pc.addStream(stream);
 
-      // Add the local video element to the page
-      document.querySelector('#video-list').appendChild(localVideo);
+    // Receive an offer
+    receiveOffer(function(offer) {
+      pc.setRemoteDescription(offer);
+      pc.createAnswer().then(function(answer) {
+        pc.setLocalDescription(answer);
+        sendMessage('answer', answer, chatRoomId, remoteUserId);
+      });
 
-      // Function to create a new RTCPeerConnection for each new user
-      function createPeerConnection(remoteUserId) {
-        var pc = new RTCPeerConnection();
-        connections[remoteUserId] = pc;
-        pc.addStream(stream);
+      // Receive a track event
+      pc.ontrack = function(event) {
+        // Create a video element for the remote video stream
+        var remoteVideo = document.createElement('video');
+        remoteVideo.id = remoteUserId + '-video';
+remoteVideo.srcObject = event.streams[0];
+remoteVideo.autoplay = true;
 
-        // Receive an offer
-        receiveOffer(remoteUserId, function(offer) {
-          pc.setRemoteDescription(offer);
-          pc.createAnswer().then(function(answer) {
-            pc.setLocalDescription(answer);
-            sendMessage('answer', answer, chatRoomId, remoteUserId);
-          });
+document.querySelector('#video-list').appendChild(remoteVideo);
+};
 
-          // Receive a track event
-          pc.ontrack = function(event) {
-            // Create a video element for the remote video stream
-            var remoteVideo = document.createElement('video');
-            remoteVideo.srcObject = event.streams[0];
-            remoteVideo.autoplay = true;
+pc.onicecandidate = function(event) {
+if (event.candidate) {
+sendMessage('candidate', event.candidate, chatRoomId, remoteUserId);
+}
+};
 
-            // Add the remote video element to the page
-            document.querySelector('#video-list').appendChild(remoteVideo);
-          };
-        });
+return pc;
+}
 
-        pc.createOffer().then(function(offer) {
-          pc.setLocalDescription(offer);
-          sendMessage('offer', offer, chatRoomId, remoteUserId);
-        });
-      }
+// Function to handle new user connections
+function handleNewUser(remoteUserId) {
+var pc = createPeerConnection(remoteUserId);
 
-      // Function to be called when a new user joins the room
-      function onNewUser(remoteUserId) {
-        createPeerConnection(remoteUserId);
-      }
+sendMessage('offer', pc.localDescription, chatRoomId, remoteUserId);
+}
 
-      // Function to be called when a user leaves the room
-      function onUserLeft(remoteUserId) {
-        connections[remoteUserId].close();
-        delete connections[remoteUserId];
-      }
-    });
+// Open a WebSocket connection to the server
+var socket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + room_name + '/');
+
+// Handle incoming messages
+socket.addEventListener('message', function(event) {
+var data = JSON.parse(event.data);
+
+if (data.type === 'new-user') {
+handleNewUser(data.message);
+} else if (data.type === 'offer') {
+receiveOffer(function(offer) {
+var pc = createPeerConnection(data.sender);
+pc.setRemoteDescription(offer);
+pc.createAnswer().then(function(answer) {
+pc.setLocalDescription(answer);
+sendMessage('answer', answer, chatRoomId, data.sender);
+});
+});
+} else if (data.type === 'answer') {
+connections[data.sender].setRemoteDescription(data.message);
+} else if (data.type === 'candidate') {
+connections[data.sender].addIceCandidate(data.message);
+}
+});
+
+// Send a message to the server to let it know a new user has joined the chat room
+socket.addEventListener('open', function(event) {
+sendMessage('new-user', '', chatRoomId, '');
+});
+}})
+.catch(function(error) {
+console.error(error);
+});
 </script>
-
-
-
-
-
-
-
-
-
