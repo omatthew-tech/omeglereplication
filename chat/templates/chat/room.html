@@ -1,129 +1,42 @@
-{% load static %}
-<!DOCTYPE html>
-
-
-
-<!-- chat/templates/chat/room.html -->
-<h1>{{ chat_room.room_name }}</h1>
-<h1>{{ chat_room.id }}</h1>
-<ul id="video-list"></ul>
+<h1>{{ chat_room.room_name }} Room</h1>
+<div id="streams-container">
+{% for message in messages %}
+  <div class="stream">
+    <h2>{{ message.sender }}'s Stream</h2>
+    <video id="{{ message.sender }}-stream" autoplay></video>
+  </div>
+{% endfor %}
+</div>
 <script>
-    function sendMessage(type, message) {
-    // Open a WebSocket connection to the server
-    var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
-// Send the message when the WebSocket connection is open
-socket.addEventListener('open', function(event) {
-  socket.send(JSON.stringify({
-    type: type,
-    message: message.toString()
-  }));
-});
-}
-
-// Receive an offer from the other client
-function receiveOffer(callback) {
-// Open a WebSocket connection to the server
-var socket = new WebSocket('ws://${window.location.host}/ws/chat/${room_name}/');
-// Call the callback with the offer when a message is received
-socket.addEventListener('message', function(event) {
-  var data = JSON.parse(event.data);
-  if (data.type === 'offer') {
-    callback(data.message);
-  }
-});
-}
-
-var room_name = window.location.pathname.split('/').pop();
-
-// Keep track of the chat room id
-var chatRoomId = "{{ chat_room.id }}";
-var connections = {};
-
-// Create a media stream
-navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-.then(function(stream) {
-// Create a video element for the local video stream
-var localVideo = document.createElement('video');
-localVideo.id = 'local-video';
-localVideo.srcObject = stream;
-localVideo.autoplay = true;
-localVideo.muted = true;
-
-  // Add the local video element to the page
-  document.querySelector('#video-list').appendChild(localVideo);
-
-  // Function to create a new RTCPeerConnection for each new user
-  function createPeerConnection(remoteUserId) {
-    var pc = new RTCPeerConnection();
-    connections[remoteUserId] = pc;
-    pc.addStream(stream);
-
-    // Receive an offer
-    receiveOffer(function(offer) {
-      pc.setRemoteDescription(offer);
-      pc.createAnswer().then(function(answer) {
-        pc.setLocalDescription(answer);
-        sendMessage('answer', answer, chatRoomId, remoteUserId);
+  const streamsContainer = document.getElementById("streams-container");
+  const socket = new WebSocket("ws://" + window.location.host + "/live_stream/");
+  
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const type = data.type;
+    const payload = data.payload;
+    
+    if (type === "offer") {
+      const senderStream = document.getElementById(`${payload.sender}-stream`);
+      const stream = new MediaStream();
+      senderStream.srcObject = stream;
+      const peerConnection = new RTCPeerConnection();
+      peerConnection.addStream(stream);
+      peerConnection.setRemoteDescription(new RTCSessionDescription(payload.offer));
+      peerConnection.createAnswer().then((answer) => {
+        peerConnection.setLocalDescription(answer);
+        socket.send(JSON.stringify({
+          type: "answer",
+          answer: answer
+        }));
       });
-
-      // Receive a track event
-      pc.ontrack = function(event) {
-        // Create a video element for the remote video stream
-        var remoteVideo = document.createElement('video');
-        remoteVideo.id = remoteUserId + '-video';
-remoteVideo.srcObject = event.streams[0];
-remoteVideo.autoplay = true;
-
-document.querySelector('#video-list').appendChild(remoteVideo);
-};
-
-pc.onicecandidate = function(event) {
-if (event.candidate) {
-sendMessage('candidate', event.candidate, chatRoomId, remoteUserId);
-}
-};
-
-return pc;
-}
-
-// Function to handle new user connections
-function handleNewUser(remoteUserId) {
-var pc = createPeerConnection(remoteUserId);
-
-sendMessage('offer', pc.localDescription, chatRoomId, remoteUserId);
-}
-
-// Open a WebSocket connection to the server
-var socket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + room_name + '/');
-
-// Handle incoming messages
-socket.addEventListener('message', function(event) {
-var data = JSON.parse(event.data);
-
-if (data.type === 'new-user') {
-handleNewUser(data.message);
-} else if (data.type === 'offer') {
-receiveOffer(function(offer) {
-var pc = createPeerConnection(data.sender);
-pc.setRemoteDescription(offer);
-pc.createAnswer().then(function(answer) {
-pc.setLocalDescription(answer);
-sendMessage('answer', answer, chatRoomId, data.sender);
-});
-});
-} else if (data.type === 'answer') {
-connections[data.sender].setRemoteDescription(data.message);
-} else if (data.type === 'candidate') {
-connections[data.sender].addIceCandidate(data.message);
-}
-});
-
-// Send a message to the server to let it know a new user has joined the chat room
-socket.addEventListener('open', function(event) {
-sendMessage('new-user', '', chatRoomId, '');
-});
-}})
-.catch(function(error) {
-console.error(error);
-});
+    } else if (type === "answer") {
+      const senderStream = document.getElementById(`${payload.sender}-stream`);
+      const stream = new MediaStream();
+      senderStream.srcObject = stream;
+      const peerConnection = new RTCPeerConnection();
+      peerConnection.addStream(stream);
+      peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
+    }
+  };
 </script>
