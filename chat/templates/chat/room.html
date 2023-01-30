@@ -1,3 +1,7 @@
+{% load static %}
+
+<!-- chat/templates/chat/room.html -->
+<script src="{% static 'chat/js/websockets.js' %}"></script>
 <!-- chat/templates/chat/room.html -->
 <h1>{{ chat_room.room_name }}</h1>
 
@@ -61,6 +65,8 @@
       });
     });
 </script>
+
+
 
 
 

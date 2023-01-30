@@ -31,7 +31,7 @@ DEBUG = True
 if IS_HEROKU:
     ALLOWED_HOSTS = ["*", "https://myomegle.herokuapp.com/",]
 else:
-    ALLOWED_HOSTS = ["https://myomegle.herokuapp.com/",]
+    ALLOWED_HOSTS = ["https://myomegle.herokuapp.com/", '127.0.0.1:8000','127.0.0.1',]
 
 
 # Application definition
